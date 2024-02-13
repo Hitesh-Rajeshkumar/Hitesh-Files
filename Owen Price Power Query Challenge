@@ -1,0 +1,20 @@
+let
+    Source = Excel.CurrentWorkbook(){[Name="Table4"]}[Content],
+    #"Lowercased Text" = Table.TransformColumns(Source,{{"Column1", Text.Lower, type text}}),
+    #"Split Column by Delimiter" = Table.ExpandListColumn(Table.TransformColumns(#"Lowercased Text", {{"Column1", Splitter.SplitTextByDelimiter(" ", QuoteStyle.Csv), let itemType = (type nullable text) meta [Serialized.Text = true] in type {itemType}}}), "Column1"),
+    #"Added Custom" = Table.AddColumn(#"Split Column by Delimiter", "Custom", each Text.Select([Column1],{"a".."z"})),
+    #"Removed Other Columns1" = Table.SelectColumns(#"Added Custom",{"Custom"}),
+    #"Changed Type2" = Table.TransformColumnTypes(#"Removed Other Columns1",{{"Custom", type text}}),
+    #"Merged Queries" = Table.NestedJoin(#"Changed Type2", {"Custom"}, #"nltk-english-stopwords", {"Custom"}, "nltk-english-stopwords", JoinKind.LeftAnti),
+    #"Removed Columns" = Table.RemoveColumns(#"Merged Queries",{"nltk-english-stopwords"}),
+    test = Table.AddColumn(#"Removed Columns", "Custom.1", each if Text.EndsWith([Custom], "s") then Text.RemoveRange([Custom], Text.Length([Custom]) - 1) else [Custom]),
+    #"Changed Type3" = Table.TransformColumnTypes(test,{{"Custom.1", type text}}),
+    #"Grouped Rows" = Table.Group(#"Changed Type3", {"Custom.1"}, {{"Count", each Table.RowCount(_), Int64.Type}}),
+    #"Filtered Rows" = Table.SelectRows(#"Grouped Rows", each ([Count] <> 1)),
+    #"Added Custom1" = Table.AddColumn(#"Filtered Rows", "Custom", each if List.ContainsAny(List.Distinct(test[Custom]), {Text.From([Custom.1])}) then [Custom.1] else [Custom.1] & "s"),
+    #"Changed Type" = Table.TransformColumnTypes(#"Added Custom1",{{"Custom", type text}}),
+    #"Removed Columns1" = Table.RemoveColumns(#"Changed Type",{"Custom.1"}),
+    #"Reordered Columns" = Table.ReorderColumns(#"Removed Columns1",{"Custom", "Count"}),
+    #"Sorted Rows" = Table.Sort(#"Reordered Columns",{{"Count", Order.Descending}})
+in
+    #"Sorted Rows"
